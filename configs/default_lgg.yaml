@@ -1,0 +1,21 @@
+cohort:
+  name: lower-grade-glioma
+
+data:
+  source: gdc
+  project_id: TCGA-LGG
+  workflow_type: STAR - Counts
+  cbioportal_study_id:
+
+preprocessing:
+  n_hvg: 2000
+  random_seed: 42
+
+train:
+  epochs: 100
+  synthetic_multiplier: 3
+  synthetic_min_rows: 200
+
+validate:
+  sample_ks_genes: 500
+  tstr_max_genes: 200

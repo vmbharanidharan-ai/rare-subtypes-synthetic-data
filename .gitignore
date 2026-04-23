@@ -9,3 +9,4 @@ results/synthetic/*.parquet
 results/synthetic/*.pkl
 results/figures/
 .ipynb_checkpoints/
+results/runs/

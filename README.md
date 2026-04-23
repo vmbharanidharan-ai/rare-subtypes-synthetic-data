@@ -1,11 +1,24 @@
-# rare-synth (MVP)
+# rare-synth (platform-style MVP v1.2)
 
-End-to-end demo: **open TCGA-UVM RNA-seq** → preprocess → **CTGAN (SDV)** → synthetic cohort → **UMAP / KS / TSTR / privacy proxy** figures.
+Config-driven synthetic cohort generation for rare oncology with versioned runs, run registry, run comparison, and API access.
 
-## Prerequisites (Mac)
+## What v1.2 adds
 
-- Python **3.11+** (e.g. `brew install python@3.11`)
-- **Cursor**: open this folder (`File → Open Folder…`)
+- **Run registry**: `results/runs/index.csv`
+- **Run comparison command**: compare metric deltas between runs
+- **FastAPI service**: run generation and inspect registry over HTTP
+
+## Core architecture
+
+- `rare_synth/data/gdc.py` - GDC cohort download
+- `rare_synth/data/cbioportal.py` - cBioPortal snapshot ingestion
+- `rare_synth/pipeline/preprocess.py` - harmonization + HVG selection
+- `rare_synth/pipeline/train.py` - CTGAN training + synthetic cohort sampling
+- `rare_synth/pipeline/validate.py` - fidelity/utility/privacy metrics + reports
+- `rare_synth/pipeline/registry.py` - append/load run registry index
+- `rare_synth/pipeline/compare.py` - compare validation metrics across runs
+- `rare_synth/api.py` - FastAPI app
+- `rare_synth/cli.py` - command runner
 
 ## Setup
 
@@ -16,42 +29,78 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## API keys
+## CLI commands
 
-- **GDC / TCGA open access**: no key (this MVP uses only open STAR count files).
-- **cBioPortal** (optional later): public API, no key.
-- **Controlled-access TCGA** (optional, not needed here): NIH **eRA Commons** + `gdc-client` + dbGaP authorization.
-
-## Run pipeline
+### Full pipeline
 
 ```bash
-source venv/bin/activate
-python src/download.py      # ~200–500 MB download
-python src/preprocess.py
-python src/train.py         # CTGAN; 100 epochs ≈ 15–40 min on Apple Silicon
-python src/validate.py
+python -m rare_synth.cli all --config configs/default_uvm.yaml --root .
 ```
 
-Outputs:
+### Stage-by-stage with explicit run id
 
-- `data/processed/combined.parquet` — real table used for training  
-- `results/synthetic/synthetic_100ep.parquet` — synthetic patients  
-- `results/figures/*.png` — UMAP, KS histogram, TSTR bar chart  
+```bash
+python -m rare_synth.cli train --config configs/default_uvm.yaml --root . --run-id uvm-test
+python -m rare_synth.cli validate --config configs/default_uvm.yaml --root . --run-id uvm-test
+```
 
-## Cursor workflow
+### Compare runs
 
-1. Open the **Terminal** in Cursor (`Ctrl+` `).
-2. Run commands above; paste errors into chat with **Cmd+L** / Agent for fixes.
-3. Tune CTGAN: edit `epochs`, `generator_dim`, or `batch_size` in `src/train.py`.
+```bash
+python -m rare_synth.cli compare-runs --root . --run-a run-id-1 --run-b run-id-2
+```
 
-## Datasets (this MVP)
+If `--run-a` / `--run-b` are omitted, the command compares the latest two run ids in the registry.
 
-| Source | Cohort | What you pull |
-|--------|--------|----------------|
-| [GDC](https://portal.gdc.cancer.gov/) | **TCGA-UVM** | RNA-seq **Gene Expression Quantification**, workflow **STAR - Counts**, access **open** |
+### Serve API
 
-## Optional next steps
+```bash
+python -m rare_synth.cli serve-api --host 127.0.0.1 --port 8000
+```
 
-- Add **cBioPortal** cohorts for more UVM samples (REST API).
-- Add **synthcity** for formal privacy metrics.
-- Swap CTGAN for **scVI** / **TVAE** paths for single-cell or different priors.
+## API endpoints
+
+- `GET /health`
+- `GET /runs?root=.`
+- `GET /compare?root=.&run_a=...&run_b=...`
+- `POST /generate`
+
+Example payload:
+
+```json
+{
+  "config": "configs/default_uvm.yaml",
+  "root": ".",
+  "command": "all",
+  "run_id": "optional-custom-id"
+}
+```
+
+## Configs included
+
+- `configs/default_uvm.yaml`
+- `configs/default_lgg.yaml`
+- `configs/cbioportal_ucec_tcga.yaml`
+
+## Artifacts
+
+Per run id, artifacts are stored under:
+
+- `results/runs/<run_id>/synthetic/`
+- `results/runs/<run_id>/figures/`
+- `results/runs/<run_id>/reports/`
+
+Run index across all runs:
+
+- `results/runs/index.csv`
+
+## Backward-compatible wrappers
+
+These still work and call the new CLI:
+
+```bash
+python src/download.py
+python src/preprocess.py
+python src/train.py
+python src/validate.py
+```
