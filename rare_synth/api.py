@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Optional
+import json
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
@@ -42,12 +43,72 @@ def list_runs(root: str = ".") -> dict:
     return {"count": int(len(df)), "rows": df.tail(50).to_dict(orient="records")}
 
 
+def _read_metrics_for_run(root: Path, run_id: str) -> dict:
+    p = root / "results" / "runs" / run_id / "reports" / "validation_metrics.json"
+    if not p.exists():
+        return {"run_id": run_id, "has_metrics": False}
+    with open(p, encoding="utf-8") as f:
+        data = json.load(f)
+    data["run_id"] = run_id
+    data["has_metrics"] = True
+    return data
+
+
+def _quality_summary(metrics: dict) -> dict:
+    if not metrics.get("has_metrics"):
+        return {"grade": "N/A", "notes": ["No validation metrics found for this run."]}
+    notes = []
+    score = 0
+    privacy_auc = metrics.get("privacy_proxy_auc")
+    if isinstance(privacy_auc, (int, float)):
+        if privacy_auc <= 0.7:
+            score += 1
+            notes.append("Privacy proxy looks acceptable.")
+        elif privacy_auc <= 0.85:
+            notes.append("Privacy separability is moderate; tune model.")
+        else:
+            notes.append("Privacy separability is high; likely synthetic-real mismatch.")
+    ks = metrics.get("ks_pct_below_0_2")
+    if isinstance(ks, (int, float)):
+        if ks >= 40:
+            score += 1
+            notes.append("Distribution fidelity is strong.")
+        elif ks >= 20:
+            notes.append("Distribution fidelity is moderate.")
+        else:
+            notes.append("Distribution fidelity is weak.")
+    nn = metrics.get("nn_leakage_ratio")
+    if isinstance(nn, (int, float)):
+        if nn <= 0.1:
+            score += 1
+            notes.append("Nearest-neighbor leakage risk appears low.")
+        elif nn <= 0.25:
+            notes.append("Nearest-neighbor leakage risk is moderate.")
+        else:
+            notes.append("Nearest-neighbor leakage risk is elevated.")
+
+    grade = "Low"
+    if score >= 3:
+        grade = "High"
+    elif score == 2:
+        grade = "Medium"
+    return {"grade": grade, "notes": notes}
+
+
 @app.get("/compare")
 def compare(root: str = ".", run_a: Optional[str] = None, run_b: Optional[str] = None) -> dict:
     try:
         return compare_runs(Path(root), run_a=run_a, run_b=run_b)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/run-summary")
+def run_summary(root: str = ".", run_id: str = "") -> dict:
+    if not run_id:
+        raise HTTPException(status_code=400, detail="run_id is required")
+    metrics = _read_metrics_for_run(Path(root), run_id)
+    return {"metrics": metrics, "quality": _quality_summary(metrics)}
 
 
 @app.get("/dashboard", response_class=HTMLResponse)
@@ -106,6 +167,115 @@ def dashboard(root: str = ".") -> str:
       </thead>
       <tbody>{table_rows}</tbody>
     </table>
+  </body>
+</html>
+"""
+
+
+@app.get("/app", response_class=HTMLResponse)
+def app_ui(root: str = ".") -> str:
+    return f"""
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>RareSynth App</title>
+    <style>
+      body {{ font-family: -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; margin: 24px; color:#1a1a1a; }}
+      h1 {{ margin: 0 0 4px 0; }}
+      .sub {{ color:#666; margin-bottom:16px; }}
+      .grid {{ display:grid; grid-template-columns: 1fr 1fr; gap:16px; }}
+      .card {{ border:1px solid #ddd; border-radius:8px; padding:12px; }}
+      label {{ display:block; font-size:12px; color:#444; margin-bottom:4px; }}
+      input, select, button, textarea {{ width:100%; padding:8px; margin-bottom:8px; box-sizing:border-box; }}
+      button {{ cursor:pointer; }}
+      pre {{ background:#f7f7f7; padding:8px; overflow:auto; border-radius:6px; }}
+      .mono {{ font-family: ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px; }}
+    </style>
+  </head>
+  <body>
+    <h1>RareSynth App</h1>
+    <div class="sub">Run synthetic cohort jobs, inspect runs, and assess biological/quality signals.</div>
+    <div class="grid">
+      <div class="card">
+        <h3>Run Pipeline</h3>
+        <label>Config</label>
+        <select id="config">
+          <option>configs/default_uvm.yaml</option>
+          <option>configs/default_lgg.yaml</option>
+          <option>configs/cbioportal_ucec_tcga.yaml</option>
+        </select>
+        <label>Command</label>
+        <select id="command">
+          <option>all</option><option>download</option><option>preprocess</option>
+          <option>train</option><option>validate</option><option>ingest-cbioportal</option>
+        </select>
+        <label>Run ID (optional)</label>
+        <input id="runId" placeholder="optional-custom-run-id"/>
+        <button onclick="runJob()">Execute</button>
+        <div id="runOut" class="mono"></div>
+      </div>
+      <div class="card">
+        <h3>Run Metrics Summary</h3>
+        <label>Run ID</label>
+        <input id="summaryRunId" placeholder="paste run id"/>
+        <button onclick="loadSummary()">Load Summary</button>
+        <div id="summaryOut" class="mono"></div>
+      </div>
+      <div class="card">
+        <h3>Compare Runs</h3>
+        <label>Run A</label><input id="runA" placeholder="run id A"/>
+        <label>Run B</label><input id="runB" placeholder="run id B"/>
+        <button onclick="compareRuns()">Compare</button>
+        <div id="cmpOut" class="mono"></div>
+      </div>
+      <div class="card">
+        <h3>Recent Runs</h3>
+        <button onclick="loadRuns()">Refresh Runs</button>
+        <pre id="runsOut"></pre>
+      </div>
+    </div>
+    <script>
+      const ROOT = {json.dumps(root)};
+      async function runJob() {{
+        const body = {{
+          config: document.getElementById('config').value,
+          root: ROOT,
+          command: document.getElementById('command').value,
+        }};
+        const runId = document.getElementById('runId').value.trim();
+        if (runId) body.run_id = runId;
+        const r = await fetch('/generate', {{
+          method: 'POST',
+          headers: {{'Content-Type':'application/json'}},
+          body: JSON.stringify(body),
+        }});
+        const j = await r.json();
+        document.getElementById('runOut').textContent = JSON.stringify(j, null, 2);
+      }}
+      async function loadRuns() {{
+        const r = await fetch('/runs?root=' + encodeURIComponent(ROOT));
+        const j = await r.json();
+        document.getElementById('runsOut').textContent = JSON.stringify(j.rows, null, 2);
+      }}
+      async function compareRuns() {{
+        const a = document.getElementById('runA').value.trim();
+        const b = document.getElementById('runB').value.trim();
+        let url = '/compare?root=' + encodeURIComponent(ROOT);
+        if (a) url += '&run_a=' + encodeURIComponent(a);
+        if (b) url += '&run_b=' + encodeURIComponent(b);
+        const r = await fetch(url);
+        const j = await r.json();
+        document.getElementById('cmpOut').textContent = JSON.stringify(j, null, 2);
+      }}
+      async function loadSummary() {{
+        const runId = document.getElementById('summaryRunId').value.trim();
+        const r = await fetch('/run-summary?root=' + encodeURIComponent(ROOT) + '&run_id=' + encodeURIComponent(runId));
+        const j = await r.json();
+        document.getElementById('summaryOut').textContent = JSON.stringify(j, null, 2);
+      }}
+      loadRuns();
+    </script>
   </body>
 </html>
 """

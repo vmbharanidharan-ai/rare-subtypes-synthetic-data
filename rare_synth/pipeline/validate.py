@@ -70,6 +70,28 @@ def compute_ks_stats(real: pd.DataFrame, synthetic: pd.DataFrame, gene_cols: lis
     return pd.DataFrame(rows)
 
 
+def clinical_fidelity(real: pd.DataFrame, synthetic: pd.DataFrame) -> dict[str, float | None]:
+    """Simple clinical consistency checks for biological plausibility."""
+    out: dict[str, float | None] = {
+        "age_mean_abs_diff": None,
+        "vital_status_dist_l1": None,
+    }
+    if "age_at_diagnosis" in real.columns and "age_at_diagnosis" in synthetic.columns:
+        r = pd.to_numeric(real["age_at_diagnosis"], errors="coerce").dropna()
+        s = pd.to_numeric(synthetic["age_at_diagnosis"], errors="coerce").dropna()
+        if len(r) > 0 and len(s) > 0:
+            out["age_mean_abs_diff"] = float(abs(r.mean() - s.mean()))
+
+    if "vital_status" in real.columns and "vital_status" in synthetic.columns:
+        rdist = real["vital_status"].fillna("unknown").astype(str).value_counts(normalize=True)
+        sdist = synthetic["vital_status"].fillna("unknown").astype(str).value_counts(normalize=True)
+        idx = sorted(set(rdist.index).union(set(sdist.index)))
+        rvec = rdist.reindex(idx).fillna(0.0).values
+        svec = sdist.reindex(idx).fillna(0.0).values
+        out["vital_status_dist_l1"] = float(np.abs(rvec - svec).sum())
+    return out
+
+
 def _align_synthetic_labels(synth_vital: pd.Series, le: LabelEncoder) -> np.ndarray:
     classes = list(le.classes_)
     default = classes.index("unknown") if "unknown" in classes else 0
@@ -235,6 +257,7 @@ def run_validate(
     utility = tstr_utility(real, synthetic, gene_cols, tstr_max_genes=tstr_max_genes)
     privacy_auc = privacy_proxy_auc(real, synthetic, gene_cols, tstr_max_genes=tstr_max_genes)
     nn_leakage = nearest_neighbor_leakage(real, synthetic, gene_cols, tstr_max_genes=tstr_max_genes)
+    clinical = clinical_fidelity(real, synthetic)
 
     metrics = {
         "n_real": int(len(real)),
@@ -245,6 +268,8 @@ def run_validate(
         "tstr_auc": utility.get("tstr_auc"),
         "privacy_proxy_auc": privacy_auc,
         "nn_leakage_ratio": nn_leakage,
+        "age_mean_abs_diff": clinical.get("age_mean_abs_diff"),
+        "vital_status_dist_l1": clinical.get("vital_status_dist_l1"),
     }
 
     write_validation_report(

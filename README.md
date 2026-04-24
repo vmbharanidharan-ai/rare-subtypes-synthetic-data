@@ -72,7 +72,9 @@ python -m rare_synth.cli serve-api --host 127.0.0.1 --port 8000
 - `GET /health`
 - `GET /runs?root=.`
 - `GET /compare?root=.&run_a=...&run_b=...`
+- `GET /run-summary?root=.&run_id=...`
 - `GET /dashboard?root=.`
+- `GET /app?root=.`
 - `POST /generate`
 
 Example payload:
@@ -103,6 +105,35 @@ Per run id, artifacts are stored under:
 Run index across all runs:
 
 - `results/runs/index.csv`
+
+## Product UI (recommended)
+
+Run:
+
+```bash
+python3 -m rare_synth.cli serve-api --host 127.0.0.1 --port 8000
+```
+
+Open:
+
+- `http://127.0.0.1:8000/app?root=.`
+
+The app page supports:
+- run execution (`download/preprocess/train/validate/all`)
+- run comparison
+- per-run metric summary with quality grade
+- recent run registry inspection
+
+## Biological usefulness signals
+
+Validation now includes:
+- distribution fidelity (`ks_pct_below_0_2`)
+- utility proxies (`trtr_auc`, `tstr_auc` when labels are usable)
+- privacy/separability (`privacy_proxy_auc`)
+- nearest-neighbor leakage risk (`nn_leakage_ratio`)
+- clinical consistency proxies:
+  - `age_mean_abs_diff`
+  - `vital_status_dist_l1`
 
 ## Troubleshooting
 
