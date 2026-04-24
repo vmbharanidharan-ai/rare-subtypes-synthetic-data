@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import shutil
 import tarfile
+import time
 from pathlib import Path
 
 import requests
@@ -56,6 +57,16 @@ def download_data_tar(file_ids: list[str], output_path: Path) -> None:
                 handle.write(chunk)
 
 
+def validate_tar(archive_path: Path) -> None:
+    """Fail fast when archive is truncated/corrupt."""
+    if not archive_path.exists() or archive_path.stat().st_size == 0:
+        raise RuntimeError(f"Archive missing/empty: {archive_path}")
+    with tarfile.open(archive_path, "r") as tar:
+        # Iterate all headers to trigger CRC/EOF issues before extraction.
+        for _ in tar:
+            pass
+
+
 def extract_tar(archive_path: Path, dest_dir: Path) -> None:
     dest_dir.mkdir(parents=True, exist_ok=True)
     with tarfile.open(archive_path, "r") as tar:
@@ -99,7 +110,26 @@ def download_project_dataset(raw_dir: Path, project_id: str, workflow_type: str)
 
     archive_path = raw_dir / f"{project_id.lower()}_rnaseq.tar"
     file_ids = [item["file_id"] for item in hits]
-    download_data_tar(file_ids, archive_path)
+
+    max_attempts = 3
+    for attempt in range(1, max_attempts + 1):
+        try:
+            if archive_path.exists():
+                archive_path.unlink()
+            download_data_tar(file_ids, archive_path)
+            validate_tar(archive_path)
+            break
+        except (requests.RequestException, tarfile.TarError, EOFError, RuntimeError) as exc:
+            if attempt == max_attempts:
+                raise RuntimeError(
+                    f"Failed to download/validate {project_id} archive after {max_attempts} attempts"
+                ) from exc
+            backoff_seconds = 3 * attempt
+            print(
+                f"Download attempt {attempt}/{max_attempts} failed ({exc}). "
+                f"Retrying in {backoff_seconds}s..."
+            )
+            time.sleep(backoff_seconds)
 
     expr_root = raw_dir / "expression_files"
     if expr_root.exists():

@@ -8,7 +8,7 @@ import pandas as pd
 from rare_synth.pipeline.registry import load_registry
 
 
-KEY_METRICS = ["tstr_auc", "trtr_auc", "privacy_proxy_auc", "ks_pct_below_0_2"]
+KEY_METRICS = ["tstr_auc", "trtr_auc", "privacy_proxy_auc", "nn_leakage_ratio", "ks_pct_below_0_2"]
 
 
 def _latest_unique_run_ids(df: pd.DataFrame, n: int = 2) -> list[str]:

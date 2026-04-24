@@ -16,6 +16,7 @@ from rare_synth.pipeline.orchestrator import (
     run_validation,
 )
 from rare_synth.pipeline.registry import append_registry_row
+from rare_synth.pipeline.registry import load_registry
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -31,6 +32,7 @@ def build_parser() -> argparse.ArgumentParser:
             "ingest-cbioportal",
             "compare-runs",
             "serve-api",
+            "list-runs",
         ],
         help="Pipeline stage to run",
     )
@@ -84,6 +86,14 @@ def main() -> None:
         import uvicorn
 
         uvicorn.run("rare_synth.api:app", host=args.host, port=args.port, reload=False)
+        return
+
+    if args.command == "list-runs":
+        df = load_registry(paths.root)
+        if df.empty:
+            print("No runs found in results/runs/index.csv")
+            return
+        print(df.tail(30).to_string(index=False))
         return
 
     if args.command == "compare-runs":

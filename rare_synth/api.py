@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 from rare_synth.config import load_config
@@ -47,6 +48,67 @@ def compare(root: str = ".", run_a: Optional[str] = None, run_b: Optional[str] =
         return compare_runs(Path(root), run_a=run_a, run_b=run_b)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/dashboard", response_class=HTMLResponse)
+def dashboard(root: str = ".") -> str:
+    paths = build_paths(Path(root))
+    df = load_registry(paths.root)
+    rows = df.tail(50).to_dict(orient="records")
+    table_rows = "".join(
+        [
+            "<tr>"
+            f"<td>{r.get('timestamp_utc','')}</td>"
+            f"<td>{r.get('run_id','')}</td>"
+            f"<td>{r.get('cohort_name','')}</td>"
+            f"<td>{r.get('stage','')}</td>"
+            f"<td>{r.get('status','')}</td>"
+            f"<td>{r.get('notes','')}</td>"
+            "</tr>"
+            for r in rows
+        ]
+    )
+    return f"""
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>RareSynth Dashboard</title>
+    <style>
+      body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 24px; }}
+      h1 {{ margin-bottom: 4px; }}
+      .sub {{ color: #666; margin-bottom: 16px; }}
+      table {{ border-collapse: collapse; width: 100%; font-size: 13px; }}
+      th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; vertical-align: top; }}
+      th {{ background: #f7f7f7; }}
+      code {{ background: #f2f2f2; padding: 1px 4px; border-radius: 3px; }}
+    </style>
+  </head>
+  <body>
+    <h1>RareSynth Dashboard</h1>
+    <div class="sub">Recent run registry entries ({len(rows)} shown)</div>
+    <p>
+      Endpoints:
+      <a href="/health">/health</a> |
+      <a href="/runs?root=.">/runs</a> |
+      <a href="/compare?root=.">/compare</a>
+    </p>
+    <table>
+      <thead>
+        <tr>
+          <th>Timestamp (UTC)</th>
+          <th>Run ID</th>
+          <th>Cohort</th>
+          <th>Stage</th>
+          <th>Status</th>
+          <th>Notes</th>
+        </tr>
+      </thead>
+      <tbody>{table_rows}</tbody>
+    </table>
+  </body>
+</html>
+"""
 
 
 @app.post("/generate")

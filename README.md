@@ -1,12 +1,15 @@
-# rare-synth (platform-style MVP v1.2)
+# rare-synth (product-ready demo v1.3)
 
 Config-driven synthetic cohort generation for rare oncology with versioned runs, run registry, run comparison, and API access.
 
-## What v1.2 adds
+## What v1.3 adds
 
 - **Run registry**: `results/runs/index.csv`
 - **Run comparison command**: compare metric deltas between runs
 - **FastAPI service**: run generation and inspect registry over HTTP
+- **Dashboard**: `/dashboard` run monitor page
+- **Resilient GDC downloads**: retry + tar integrity validation
+- **Extra privacy metric**: nearest-neighbor leakage ratio
 
 ## Core architecture
 
@@ -52,6 +55,12 @@ python -m rare_synth.cli compare-runs --root . --run-a run-id-1 --run-b run-id-2
 
 If `--run-a` / `--run-b` are omitted, the command compares the latest two run ids in the registry.
 
+### List recent runs (operator view)
+
+```bash
+python -m rare_synth.cli list-runs --root .
+```
+
 ### Serve API
 
 ```bash
@@ -63,6 +72,7 @@ python -m rare_synth.cli serve-api --host 127.0.0.1 --port 8000
 - `GET /health`
 - `GET /runs?root=.`
 - `GET /compare?root=.&run_a=...&run_b=...`
+- `GET /dashboard?root=.`
 - `POST /generate`
 
 Example payload:
@@ -93,6 +103,21 @@ Per run id, artifacts are stored under:
 Run index across all runs:
 
 - `results/runs/index.csv`
+
+## Troubleshooting
+
+- `EOFError: Compressed file ended...` during GDC extraction:
+  - Usually a truncated download.
+  - Re-run download; the downloader now retries and validates archive integrity.
+- `trtr_auc` / `tstr_auc` is `None`:
+  - Target labels are missing or single-class after filtering.
+  - This is expected for some cohorts; use comparison over cohorts/runs.
+- `privacy_proxy_auc` near `1.0`:
+  - Real and synthetic are highly separable.
+  - Indicates poor fidelity/generalization; tune model, features, or training setup.
+- `nn_leakage_ratio` high:
+  - Synthetic rows are too close to real rows in standardized feature space.
+  - Indicates potential memorization risk.
 
 ## Backward-compatible wrappers
 
