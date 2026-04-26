@@ -2,6 +2,31 @@
 
 Config-driven synthetic cohort generation for rare oncology with versioned runs, run registry, run comparison, and API access.
 
+## Purpose
+
+`rare-synth` exists to help researchers and AI teams work on **rare cancer subtypes** (and eventually broader rare diseases) where real patient cohorts are too small for robust model development.
+
+The platform:
+- ingests public cohort data (currently GDC and cBioPortal snapshots),
+- generates synthetic cohorts with CTGAN,
+- evaluates whether synthetic data is useful and safe enough for downstream experimentation,
+- and tracks every run so results are reproducible and comparable.
+
+This is a research/development platform, not a clinical decision tool.
+
+## Summary At A Glance
+
+- **Problem:** rare subtype datasets are sparse and fragmented.
+- **Core workflow:** `download -> preprocess -> train -> validate`.
+- **Primary output:** synthetic cohorts plus validation reports and figures.
+- **Main interfaces:** CLI, API (`/docs`), and product UI (`/app`).
+- **Main value:** faster iteration on rare-subtype modeling with explicit quality signals.
+
+## Who This Is For
+
+- Computational oncology researchers
+- Bioinformatics / ML teams building rare-disease models
+
 ## What v1.3 adds
 
 - **Run registry**: `results/runs/index.csv`
