@@ -271,3 +271,58 @@ python src/preprocess.py
 python src/train.py
 python src/validate.py
 ```
+
+---
+
+## Multimodal Extension Project
+
+The repository also includes a second project scaffold at `multimodal-rare-synth/` for the full multimodal rare-oncology roadmap.
+
+### Scope
+
+`multimodal-rare-synth` is designed for synthetic generation across:
+1. imaging (histopathology / MRI / CT)
+2. genomic / multi-omics
+3. clinical tabular / longitudinal
+4. cross-modal integration
+5. ontology-informed generation for ultra-rare subtypes
+
+### What this scaffold provides
+
+- modular interfaces for each modality-specific generator
+- one orchestrator to run the full multimodal stack
+- validation hooks for fidelity / utility / privacy / biological consistency
+- API skeleton to trigger generation jobs
+
+### Multimodal architecture
+
+```text
+Data Sources -> Harmonization -> Modality Generators -> Cross-Modal Consistency -> Validation -> Artifacts/API
+
+Modalities:
+  ImagingGenerator
+  GenomicsGenerator
+  ClinicalGenerator
+  MultiOmicsIntegrator
+  OntologyGenerator
+```
+
+### Quick start (multimodal scaffold)
+
+```bash
+cd multimodal-rare-synth
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+PYTHONPATH=src python -m multimodal_rare_synth.api.server
+```
+
+Then open `http://127.0.0.1:8010/docs`.
+
+### Next implementation priorities
+
+1. plug in a real imaging model (StyleGAN/latent diffusion)
+2. plug in omics model (VAE/Transformer + condition vectors)
+3. add graph/ontology encoder for ultra-rare transfer
+4. implement cross-modal consistency losses + calibration
+5. add clinical expert review pipeline and model cards
