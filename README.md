@@ -48,14 +48,100 @@ This is a research/development platform, not a clinical decision tool.
 - `rare_synth/api.py` - FastAPI app
 - `rare_synth/cli.py` - command runner
 
+### Architecture diagram
+
+```text
+                  +-----------------------------+
+                  |         User / Team         |
+                  |   CLI, API (/generate), UI |
+                  +-------------+---------------+
+                                |
+                                v
+                    +-----------+-----------+
+                    |   Orchestrator/CLI    |
+                    |  (download->validate) |
+                    +-----------+-----------+
+                                |
+            +-------------------+-------------------+
+            |                                       |
+            v                                       v
+ +----------+-----------+                 +---------+----------+
+ | Data Ingestion       |                 | Run Registry       |
+ | GDC / cBioPortal     |                 | results/runs/index |
+ +----------+-----------+                 +---------+----------+
+            |                                       |
+            v                                       |
+ +----------+-----------+                           |
+ | Preprocess           |                           |
+ | expression + clinical|                           |
+ +----------+-----------+                           |
+            |                                       |
+            v                                       |
+ +----------+-----------+                           |
+ | Train (CTGAN)        |                           |
+ | synthetic cohort     |                           |
+ +----------+-----------+                           |
+            |                                       |
+            v                                       |
+ +----------+-----------+                           |
+ | Validate             |<--------------------------+
+ | fidelity/utility/    |
+ | privacy/clinical     |
+ +----------+-----------+
+            |
+            v
+ +----------+-----------+
+ | Artifacts            |
+ | synthetic, figures,  |
+ | reports, summaries   |
+ +----------------------+
+```
+
 ## Setup
 
 ```bash
-cd /Users/vedhabharanidharan/Projects/rare-synth
+# from repository root
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 ```
+
+## Run with Docker
+
+Build image:
+
+```bash
+docker build -t rare-synth:latest .
+```
+
+Run API:
+
+```bash
+docker run --rm -p 8000:8000 \
+  -v "$(pwd)/data:/app/data" \
+  -v "$(pwd)/results:/app/results" \
+  rare-synth:latest
+```
+
+Or with Docker Compose:
+
+```bash
+docker compose up --build
+```
+
+Stop:
+
+```bash
+docker compose down
+```
+
+Then open:
+- `http://127.0.0.1:8000/app?root=.`
+- `http://127.0.0.1:8000/docs`
+
+Notes:
+- The mounted `data/` and `results/` directories persist outputs on your host.
+- If port `8000` is already used, map another port (for example `-p 8001:8000`).
 
 ## CLI commands
 

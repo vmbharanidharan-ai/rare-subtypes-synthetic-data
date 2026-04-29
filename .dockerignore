@@ -1,0 +1,15 @@
+.git
+.gitignore
+venv/
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+
+# Large/generated artifacts
+data/raw/
+data/processed/
+results/
+
+# Local notebooks/cache
+.ipynb_checkpoints/

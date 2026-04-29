@@ -1,0 +1,21 @@
+project:
+  name: rare-ontology-multimodal
+  disease_focus: rare-oncology
+  subtype: smarca4-deficient-undifferentiated-carcinoma
+
+modalities:
+  imaging: true
+  genomics: true
+  clinical: true
+  multiomics: true
+  ontology: true
+
+generation:
+  n_samples: 2000
+  seed: 42
+
+validation:
+  enable_fidelity: true
+  enable_utility: true
+  enable_privacy: true
+  enable_bio_consistency: true
