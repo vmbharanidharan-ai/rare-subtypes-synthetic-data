@@ -92,6 +92,23 @@ def clinical_fidelity(real: pd.DataFrame, synthetic: pd.DataFrame) -> dict[str, 
     return out
 
 
+def correlation_preservation(real: pd.DataFrame, synthetic: pd.DataFrame, gene_cols: list[str], top_k: int = 100) -> float | None:
+    """Mean absolute correlation matrix difference on top variable shared genes."""
+    shared = [g for g in gene_cols if g in synthetic.columns]
+    if len(shared) < 5:
+        return None
+    # limit dimensionality for stable/fast estimate
+    rv = real[shared].var(axis=0).sort_values(ascending=False)
+    genes = rv.head(min(top_k, len(rv))).index.tolist()
+    if len(genes) < 5:
+        return None
+    rc = real[genes].corr().values
+    sc = synthetic[genes].corr().values
+    if rc.shape != sc.shape:
+        return None
+    return float(np.nanmean(np.abs(rc - sc)))
+
+
 def _align_synthetic_labels(synth_vital: pd.Series, le: LabelEncoder) -> np.ndarray:
     classes = list(le.classes_)
     default = classes.index("unknown") if "unknown" in classes else 0
@@ -213,6 +230,9 @@ def write_validation_report(metrics: dict, report_json: Path, report_md: Path) -
         f"- TSTR AUC: {metrics.get('tstr_auc')}",
         f"- Privacy proxy AUC (real-vs-synth): {metrics.get('privacy_proxy_auc')}",
         f"- NN leakage ratio (<1.0 z-dist): {metrics.get('nn_leakage_ratio')}",
+        f"- Correlation MAE (top genes): {metrics.get('correlation_mae_top_genes')}",
+        f"- Age mean absolute diff: {metrics.get('age_mean_abs_diff')}",
+        f"- Vital status distribution L1: {metrics.get('vital_status_dist_l1')}",
         "",
         "Interpretation:",
         "- Higher TSTR relative to TRTR indicates better synthetic utility.",
@@ -258,6 +278,7 @@ def run_validate(
     privacy_auc = privacy_proxy_auc(real, synthetic, gene_cols, tstr_max_genes=tstr_max_genes)
     nn_leakage = nearest_neighbor_leakage(real, synthetic, gene_cols, tstr_max_genes=tstr_max_genes)
     clinical = clinical_fidelity(real, synthetic)
+    corr_mae = correlation_preservation(real, synthetic, gene_cols, top_k=min(100, tstr_max_genes))
 
     metrics = {
         "n_real": int(len(real)),
@@ -270,6 +291,7 @@ def run_validate(
         "nn_leakage_ratio": nn_leakage,
         "age_mean_abs_diff": clinical.get("age_mean_abs_diff"),
         "vital_status_dist_l1": clinical.get("vital_status_dist_l1"),
+        "correlation_mae_top_genes": corr_mae,
     }
 
     write_validation_report(

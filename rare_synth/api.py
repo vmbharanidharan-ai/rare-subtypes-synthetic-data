@@ -15,6 +15,7 @@ from rare_synth.pipeline.orchestrator import (
     create_run_id,
     run_all,
     run_download,
+    run_model_benchmark,
     run_preprocessing,
     run_training,
     run_validation,
@@ -208,7 +209,7 @@ def app_ui(root: str = ".") -> str:
         <label>Command</label>
         <select id="command">
           <option>all</option><option>download</option><option>preprocess</option>
-          <option>train</option><option>validate</option><option>ingest-cbioportal</option>
+          <option>train</option><option>validate</option><option>benchmark-models</option><option>ingest-cbioportal</option>
         </select>
         <label>Run ID (optional)</label>
         <input id="runId" placeholder="optional-custom-run-id"/>
@@ -287,8 +288,11 @@ def generate(req: GenerateRequest) -> dict:
     config = load_config(req.config)
     run_id = req.run_id or create_run_id(config.cohort_name)
 
-    if req.command not in {"download", "preprocess", "train", "validate", "all"}:
-        raise HTTPException(status_code=400, detail="command must be one of download/preprocess/train/validate/all")
+    if req.command not in {"download", "preprocess", "train", "validate", "all", "benchmark-models"}:
+        raise HTTPException(
+            status_code=400,
+            detail="command must be one of download/preprocess/train/validate/all/benchmark-models",
+        )
 
     if req.command == "download":
         run_download(paths, config)
@@ -340,8 +344,28 @@ def generate(req: GenerateRequest) -> dict:
         )
         return {"run_id": run_id, "status": "validate_complete", "metrics": metrics}
 
+    if req.command == "benchmark-models":
+        manifest = run_model_benchmark(paths, config, run_id=run_id)
+        append_registry_row(
+            paths.root,
+            run_id,
+            config.cohort_name,
+            req.config,
+            "benchmark-models",
+            "success",
+            notes=f"manifest={manifest}",
+        )
+        return {"run_id": run_id, "status": "benchmark_complete", "manifest_path": str(manifest)}
+
     metrics, model_path, metrics_path = run_all(paths, config, run_id=run_id)
-    synthetic_path = paths.root / "results" / "runs" / run_id / "synthetic" / f"synthetic_{config.train_epochs}ep.parquet"
+    synthetic_path = (
+        paths.root
+        / "results"
+        / "runs"
+        / run_id
+        / "synthetic"
+        / f"synthetic_{config.train_model}_{config.train_epochs}ep.parquet"
+    )
     append_registry_row(
         paths.root,
         run_id,

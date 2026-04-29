@@ -11,6 +11,7 @@ from rare_synth.pipeline.orchestrator import (
     run_all,
     run_cbioportal_ingest,
     run_download,
+    run_model_benchmark,
     run_preprocessing,
     run_training,
     run_validation,
@@ -31,6 +32,7 @@ def build_parser() -> argparse.ArgumentParser:
             "all",
             "ingest-cbioportal",
             "compare-runs",
+            "benchmark-models",
             "serve-api",
             "list-runs",
         ],
@@ -153,6 +155,21 @@ def main() -> None:
         print(f"Synthetic data -> {synth_path}")
         return
 
+    if args.command == "benchmark-models":
+        manifest = run_model_benchmark(paths, config, run_id=run_id)
+        _register(
+            root=paths.root,
+            run_id=run_id,
+            cohort_name=config.cohort_name,
+            config_path=args.config,
+            stage="benchmark-models",
+            status="success",
+            notes=f"manifest={manifest}",
+        )
+        print(f"Run id -> {run_id}")
+        print(f"Benchmark manifest -> {manifest}")
+        return
+
     if args.command == "validate":
         metrics, metrics_path = run_validation(paths, config, run_id=run_id)
         _register(
@@ -169,7 +186,14 @@ def main() -> None:
         return
 
     metrics, model_path, metrics_path = run_all(paths, config, run_id=run_id)
-    synthetic_path = paths.root / "results" / "runs" / run_id / "synthetic" / f"synthetic_{config.train_epochs}ep.parquet"
+    synthetic_path = (
+        paths.root
+        / "results"
+        / "runs"
+        / run_id
+        / "synthetic"
+        / f"synthetic_{config.train_model}_{config.train_epochs}ep.parquet"
+    )
     _register(
         root=paths.root,
         run_id=run_id,

@@ -13,6 +13,8 @@ preprocessing:
 
 train:
   epochs: 100
+  model: ctgan
+  baseline_models: [ctgan, tvae]
   synthetic_multiplier: 3
   synthetic_min_rows: 200
 

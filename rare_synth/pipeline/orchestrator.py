@@ -8,7 +8,7 @@ from rare_synth.data.cbioportal import download_study_snapshot
 from rare_synth.data.gdc import download_project_dataset
 from rare_synth.paths import ProjectPaths
 from rare_synth.pipeline.preprocess import run_preprocess
-from rare_synth.pipeline.train import run_train
+from rare_synth.pipeline.train import run_benchmark_models, run_train
 from rare_synth.pipeline.validate import run_validate
 
 
@@ -70,6 +70,20 @@ def run_training(paths: ProjectPaths, config: RareSynthConfig, run_id: str) -> t
         combined_path=combined_path,
         synthetic_dir=synthetic_dir,
         epochs=config.train_epochs,
+        model_name=config.train_model,
+        synthetic_multiplier=config.synthetic_multiplier,
+        synthetic_min_rows=config.synthetic_min_rows,
+    )
+
+
+def run_model_benchmark(paths: ProjectPaths, config: RareSynthConfig, run_id: str) -> Path:
+    combined_path = paths.processed_dir / "combined.parquet"
+    synthetic_dir, _, _ = run_dirs(paths, run_id)
+    return run_benchmark_models(
+        combined_path=combined_path,
+        synthetic_dir=synthetic_dir,
+        epochs=config.train_epochs,
+        models=config.baseline_models,
         synthetic_multiplier=config.synthetic_multiplier,
         synthetic_min_rows=config.synthetic_min_rows,
     )
@@ -78,7 +92,7 @@ def run_training(paths: ProjectPaths, config: RareSynthConfig, run_id: str) -> t
 def run_validation(paths: ProjectPaths, config: RareSynthConfig, run_id: str) -> tuple[dict, Path]:
     combined_path = paths.processed_dir / "combined.parquet"
     synthetic_dir, figures_dir, reports_dir = run_dirs(paths, run_id)
-    synthetic_path = synthetic_dir / f"synthetic_{config.train_epochs}ep.parquet"
+    synthetic_path = synthetic_dir / f"synthetic_{config.train_model}_{config.train_epochs}ep.parquet"
     metrics = run_validate(
         combined_path=combined_path,
         synthetic_path=synthetic_path,

@@ -1,6 +1,6 @@
-# rare-synth (product-ready demo v1.3)
+# rare-synth (advanced research prototype + product scaffolding)
 
-Config-driven synthetic cohort generation for rare oncology with versioned runs, run registry, run comparison, and API access.
+Config-driven synthetic cohort generation for rare oncology with versioned runs, run registry, model benchmarking, run comparison, and API access.
 
 ## Purpose
 
@@ -35,6 +35,8 @@ This is a research/development platform, not a clinical decision tool.
 - **Dashboard**: `/dashboard` run monitor page
 - **Resilient GDC downloads**: retry + tar integrity validation
 - **Extra privacy metric**: nearest-neighbor leakage ratio
+- **Model selection + benchmarking**: CTGAN/TVAE with benchmark manifest output
+- **CI and tests**: pytest suite + GitHub Actions workflow
 
 ## Core architecture
 
@@ -166,6 +168,15 @@ python -m rare_synth.cli compare-runs --root . --run-a run-id-1 --run-b run-id-2
 
 If `--run-a` / `--run-b` are omitted, the command compares the latest two run ids in the registry.
 
+### Benchmark models
+
+```bash
+python -m rare_synth.cli benchmark-models --config configs/default_uvm.yaml --root .
+```
+
+This writes a benchmark manifest under:
+- `results/runs/<run_id>/synthetic/model_benchmark_manifest.csv`
+
 ### List recent runs (operator view)
 
 ```bash
@@ -245,6 +256,19 @@ Validation now includes:
 - clinical consistency proxies:
   - `age_mean_abs_diff`
   - `vital_status_dist_l1`
+- correlation preservation:
+  - `correlation_mae_top_genes`
+
+## Testing and CI
+
+Run tests locally:
+
+```bash
+pytest -q
+```
+
+CI workflow:
+- `.github/workflows/ci.yml` runs tests on push/PR.
 
 ## Troubleshooting
 

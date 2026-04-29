@@ -17,6 +17,8 @@ class RareSynthConfig:
     n_hvg: int
     random_seed: int
     train_epochs: int
+    train_model: str
+    baseline_models: list[str]
     synthetic_multiplier: int
     synthetic_min_rows: int
     sample_ks_genes: int
@@ -53,6 +55,8 @@ def load_config(path: str | Path) -> RareSynthConfig:
         n_hvg=int(_require(preprocessing, "n_hvg")),
         random_seed=int(_require(preprocessing, "random_seed")),
         train_epochs=int(_require(train, "epochs")),
+        train_model=str(train.get("model", "ctgan")).lower(),
+        baseline_models=[str(x).lower() for x in train.get("baseline_models", ["ctgan", "tvae"])],
         synthetic_multiplier=int(_require(train, "synthetic_multiplier")),
         synthetic_min_rows=int(_require(train, "synthetic_min_rows")),
         sample_ks_genes=int(_require(validate, "sample_ks_genes")),
